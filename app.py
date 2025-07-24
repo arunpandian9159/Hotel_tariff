@@ -25,15 +25,17 @@ def upload_file():
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     file = request.files['file']
-    if file.filename == '':
+    if not file or not file.filename or file.filename.strip() == '':
         return jsonify({'error': 'No selected file'}), 400
-    if file and allowed_file(file.filename):
+    if allowed_file(file.filename):
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         try:
-            # Call your extraction function (adjust as needed)
-            result = extract_tariff_from_pdf(filepath)
+            # Save extracted data as CSV with the same base name as the PDF
+            pdf_base = os.path.splitext(filename)[0]
+            output_csv_path = os.path.join('output', f'{pdf_base}.csv')
+            result = extract_tariff_from_pdf(filepath, output_csv_path=output_csv_path)
             # result should be a list of dicts with the required keys
             return jsonify(result)
         except Exception as e:
