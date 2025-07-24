@@ -5,6 +5,7 @@ from datetime import datetime
 import pandas as pd
 import re
 from dotenv import load_dotenv
+import json
 
 # Load environment variables
 load_dotenv()
@@ -186,51 +187,62 @@ def extract_tariff_data(pdf_path, client):
     print(f"No tariff data extracted from {pdf_path}")
     return pd.DataFrame()
 
-def extract_tariff_from_pdf(pdf_path, output_csv_path=None):
+def analyze_tariff_text_with_llm(text, client):
+    """
+    Use Mistral LLM to analyze the extracted OCR text and return a structured tariff table in the required format.
+    """
+    prompt = (
+        "You are an expert at extracting hotel tariff tables from text. "
+        "Given the following text extracted from a hotel tariff PDF, extract the room category (e.g., Deluxe Room) and output a markdown table with columns: "
+        "| Plan | Start Date | End Date | Room Price | Adult Price | Child Price | Season |. "
+        "If there are multiple plans or date ranges, include all rows. "
+        "If possible, infer the season name (e.g., peakSeason, offSeason) from the text. "
+        "exclude rack price and Published rates. "
+        "Output only the markdown table, nothing else.\n\n"
+        f"Text: {text}\n"
+    )
+    try:
+        response = client.chat.complete(
+            model="mistral-large-latest",  # or another available LLM model
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
+        # Extract the markdown table from the response
+        content = response.choices[0].message['content'] if hasattr(response.choices[0], 'message') else response.choices[0].content
+        return content
+    except Exception as e:
+        print(f"Error calling Mistral LLM: {e}")
+        return None
+
+def extract_tariff_from_pdf(pdf_path, output_csv_path=None, use_llm=True):
     """
     Wrapper for Flask: Given a PDF path, returns a list of dicts with keys:
     Meal Plan, Start Date, End Date, Room Price, Adult Price, Child Price, Season, Hotel
     Optionally saves the extracted data to a specified CSV path.
+    If use_llm is True, uses the LLM to extract the table from OCR text.
     """
     client = Mistral(api_key=api_key)
-    df = extract_tariff_data(pdf_path, client)
-    if df.empty:
+    text = extract_text_from_pdf(pdf_path, client)
+    if not text:
         return []
-    # Always write to CSV if data is extracted
-    os.makedirs('output', exist_ok=True)
-    if output_csv_path is None:
-        # Default to hotel_tariff.csv for backward compatibility
-        output_csv_path = "output/hotel_tariff.csv"
-    df.to_csv(output_csv_path, index=False)
-    # Print extracted DataFrame to terminal
-    print("Extracted Tariff Data (DataFrame):")
-    print(df)
-    # Try to extract start/end date from the 'Date Ranges' column if present
-    result = []
-    for _, row in df.iterrows():
-        # Attempt to split date ranges if present
-        date_range = row.get('Date Ranges', '')
-        if 'TO' in date_range:
-            parts = date_range.split('TO')
-            start_date = parts[0].strip()
-            end_date = parts[1].strip() if len(parts) > 1 else ''
-        else:
-            start_date = end_date = date_range
-        result.append({
-            "Meal Plan": row.get("Meal Plan", row.get("Meal plan", "N/A")),
-            "Start Date": start_date,
-            "End Date": end_date,
-            "Room Price": row.get("Room Price", "N/A"),
-            "Adult Price": row.get("Adult Price", "N/A"),
-            "Child Price": row.get("Child Price", "N/A"),
-            "Season": row.get("Season", "N/A"),
-            "Hotel": row.get("Hotel", "N/A")
-        })
-    # Print extracted result list to terminal
-    print("Extracted Tariff Data (List of Dicts):")
-    for item in result:
-        print(item)
-    return result
+    if use_llm:
+        llm_table = analyze_tariff_text_with_llm(text, client)
+        if llm_table:
+            # Optionally save the markdown table to a file
+            os.makedirs('output', exist_ok=True)
+            base = os.path.splitext(os.path.basename(pdf_path))[0]
+            with open(f'output/{base}_llm_table.md', 'w', encoding='utf-8') as f:
+                f.write(llm_table)
+            # Optionally, parse the markdown table into a list of dicts for JSON API
+            rows = []
+            lines = [l for l in llm_table.split('\n') if l.strip().startswith('|')]
+            if len(lines) >= 2:
+                header = [h.strip() for h in lines[0].split('|') if h.strip()]
+                for row in lines[2:]:
+                    cols = [c.strip() for c in row.split('|') if c.strip()]
+                    if len(cols) == len(header):
+                        rows.append(dict(zip(header, cols)))
+            return rows
 
 if __name__ == "__main__":
     # Initialize Mistral client
