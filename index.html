@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Tariff Extractor</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: auto; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f4f4f4; }
+        #result-table { display: none; }
+        #error { color: red; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Upload PDF to Extract Tariff Details</h2>
+    <form id="upload-form">
+        <input type="file" id="pdf-file" accept="application/pdf" required />
+        <button type="submit">Upload</button>
+    </form>
+    <div id="error"></div>
+    <table id="result-table">
+        <thead>
+            <tr>
+                <th>Meal Plan</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Room Price</th>
+                <th>Adult Price</th>
+                <th>Child Price</th>
+                <th>Season</th>
+                <th>Hotel</th>
+            </tr>
+        </thead>
+        <tbody id="result-body">
+        </tbody>
+    </table>
+</div>
+<script>
+const form = document.getElementById('upload-form');
+const resultTable = document.getElementById('result-table');
+const resultBody = document.getElementById('result-body');
+const errorDiv = document.getElementById('error');
+
+form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    errorDiv.textContent = '';
+    resultTable.style.display = 'none';
+    resultBody.innerHTML = '';
+    const fileInput = document.getElementById('pdf-file');
+    if (!fileInput.files.length) return;
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        let data;
+        try {
+            data = await response.json();
+        } catch (jsonErr) {
+            throw new Error('Response is not valid JSON.');
+        }
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        if (!Array.isArray(data)) {
+            throw new Error('Unexpected response format.');
+        }
+        if (data.length === 0) {
+            throw new Error('No data extracted from the PDF.');
+        }
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${row["Meal Plan"] || ''}</td>
+                <td>${row["Start Date"] || ''}</td>
+                <td>${row["End Date"] || ''}</td>
+                <td>${row["Room Price"] || ''}</td>
+                <td>${row["Adult Price"] || ''}</td>
+                <td>${row["Child Price"] || ''}</td>
+                <td>${row["Season"] || ''}</td>
+                <td>${row["Hotel"] || ''}</td>
+            `;
+            resultBody.appendChild(tr);
+        });
+        resultTable.style.display = '';
+    } catch (err) {
+        errorDiv.textContent = err.message;
+    }
+});
+</script>
+</body>
+</html>
