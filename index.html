@@ -162,50 +162,65 @@ form.addEventListener('submit', async function(e) {
         if (data.length === 0) {
             throw new Error('No data extracted from the PDF.');
         }
-        // Group data by Plan (EP, CP, MAP, etc.)
-        const plans = {};
+        // Group data by Room Category first, then by Plan within each Room Category
+        const roomCategories = {};
         data.forEach(row => {
+            const roomCat = row["Room Category"] || '';
             const plan = row["Plan"] || row["Meal Plan"] || '';
-            if (!plans[plan]) plans[plan] = [];
-            plans[plan].push(row);
+            if (!roomCategories[roomCat]) roomCategories[roomCat] = {};
+            if (!roomCategories[roomCat][plan]) roomCategories[roomCat][plan] = [];
+            roomCategories[roomCat][plan].push(row);
         });
-        // For each plan, create a table
-        Object.keys(plans).forEach(plan => {
-            const table = document.createElement('table');
-            table.style.marginBottom = '32px';
-            const caption = document.createElement('caption');
-            caption.textContent = plan;
-            caption.style.fontWeight = 'bold';
-            caption.style.fontSize = '1.1em';
-            caption.style.marginBottom = '8px';
-            table.appendChild(caption);
-            table.innerHTML += `
-                <thead>
-                    <tr>
-                        <th>Plan</th>
-                        <th>Start Date</th>
-                        <th>End Date</th>
-                        <th>Room Price</th>
-                        <th>Adult Price</th>
-                        <th>Child Price</th>
-                        <th>Season</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${plans[plan].map(row => `
+        // For each Room Category, create a section, then for each plan, create a table
+        Object.keys(roomCategories).forEach(roomCat => {
+            const section = document.createElement('div');
+            section.style.marginBottom = '40px';
+            const heading = document.createElement('h3');
+            heading.textContent = roomCat;
+            heading.style.marginTop = '32px';
+            heading.style.marginBottom = '12px';
+            heading.style.color = '#1976d2';
+            section.appendChild(heading);
+            Object.keys(roomCategories[roomCat]).forEach(plan => {
+                const table = document.createElement('table');
+                table.style.marginBottom = '24px';
+                const caption = document.createElement('caption');
+                caption.textContent = plan;
+                caption.style.fontWeight = 'bold';
+                caption.style.fontSize = '1.1em';
+                caption.style.marginBottom = '8px';
+                table.appendChild(caption);
+                table.innerHTML += `
+                    <thead>
                         <tr>
-                            <td>${row["Plan"] || row["Meal Plan"] || ''}</td>
-                            <td>${row["Start Date"] || ''}</td>
-                            <td>${row["End Date"] || ''}</td>
-                            <td>${row["Room Price"] || ''}</td>
-                            <td>${row["Adult Price"] || ''}</td>
-                            <td>${row["Child Price"] || ''}</td>
-                            <td>${row["Season"] || ''}</td>
+                            <th>Room Category</th>
+                            <th>Plan</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Room Price</th>
+                            <th>Adult Price</th>
+                            <th>Child Price</th>
+                            <th>Season</th>
                         </tr>
-                    `).join('')}
-                </tbody>
-            `;
-            tariffTablesDiv.appendChild(table);
+                    </thead>
+                    <tbody>
+                        ${roomCategories[roomCat][plan].map(row => `
+                            <tr>
+                                <td>${row["Room Category"] || ''}</td>
+                                <td>${row["Plan"] || row["Meal Plan"] || ''}</td>
+                                <td>${row["Start Date"] || ''}</td>
+                                <td>${row["End Date"] || ''}</td>
+                                <td>${row["Room Price"] || ''}</td>
+                                <td>${row["Adult Price"] || ''}</td>
+                                <td>${row["Child Price"] || ''}</td>
+                                <td>${row["Season"] || ''}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                `;
+                section.appendChild(table);
+            });
+            tariffTablesDiv.appendChild(section);
         });
         successDiv.textContent = 'Tariff details extracted successfully!';
     } catch (err) {
