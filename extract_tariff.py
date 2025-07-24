@@ -82,13 +82,35 @@ def parse_markdown_table(table_text):
     lines = [l for l in table_text.split('\n') if l.strip() and l.strip().startswith('|')]
     if not lines or len(lines) < 2:
         return []
-    header = [h.strip() for h in lines[0].split('|') if h.strip()]
+    
+    # Extract header - split by | and remove empty strings, but keep track of positions
+    header_line = lines[0]
+    header_parts = header_line.split('|')[1:-1]  # Remove first and last empty parts
+    header = [h.strip() for h in header_parts]
+    
+    # Find the separator line (contains :--- or similar)
+    separator_idx = 1
+    for i, line in enumerate(lines[1:], 1):
+        if ':---' in line or '---' in line:
+            separator_idx = i
+            break
+    
     data = []
-    for row in lines[2:]:  # skip header and separator
-        cols = [c.strip() for c in row.split('|') if c.strip()]
-        if len(cols) != len(header):
-            continue
-        data.append(dict(zip(header, cols)))
+    # Process data rows (skip header and separator)
+    for row in lines[separator_idx + 1:]:
+        # Split by | and remove first and last empty parts
+        row_parts = row.split('|')[1:-1]
+        cols = [c.strip() for c in row_parts]
+        
+        # Ensure we have the same number of columns as headers
+        while len(cols) < len(header):
+            cols.append('')
+        
+        if len(cols) >= len(header):
+            # Only take the first len(header) columns
+            cols = cols[:len(header)]
+            data.append(dict(zip(header, cols)))
+    
     return data
 
 def determine_season(text, filename):
@@ -194,7 +216,7 @@ def analyze_tariff_text_with_llm(text, client):
     Use Google Gemini LLM to analyze the extracted OCR text and return a structured tariff table in the required format.
     """
     prompt = (
-        "You are an expert at extracting hotel tariff tables from text. "
+        "You are an expert at extracting hotel tariff tables from text."
         "Given the following text extracted from a hotel tariff PDF, extract the room category (e.g., Deluxe Room) and output a markdown table with columns: "
         "| Room Category | Plan | Start Date | End Date | Room Price | Adult Price | Child Price | Season |. "
         "If there are multiple plans or date ranges, include all rows. "
@@ -226,6 +248,7 @@ def extract_tariff_from_pdf(pdf_path, output_csv_path=None, use_llm=True):
     text = extract_text_from_pdf(pdf_path, ocr_client)
     if not text:
         return []
+    
     if use_llm:
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-pro",
@@ -238,9 +261,16 @@ def extract_tariff_from_pdf(pdf_path, output_csv_path=None, use_llm=True):
             base = os.path.splitext(os.path.basename(pdf_path))[0]
             with open(f'output/{base}_llm_table.md', 'w', encoding='utf-8') as f:
                 f.write(llm_table)
-            # Optionally, parse the markdown table into a list of dicts for JSON API
+            # Parse the markdown table into a list of dicts for JSON API
             rows = parse_markdown_table(llm_table)
-            return rows
+            return rows if rows else []
+    
+    # Fallback: try to extract using the original method
+    df = extract_tariff_data(pdf_path, ocr_client)
+    if not df.empty:
+        return df.to_dict('records')
+    
+    return []
 
 if __name__ == "__main__":
     # Initialize Mistral client
