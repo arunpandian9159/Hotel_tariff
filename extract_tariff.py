@@ -178,7 +178,7 @@ def extract_tariff_data(pdf_path, client):
                     last_room = cols[0]
                 if cols[1]:
                     last_occ = cols[1]
-                meal_plan = cols[2]
+                meal_plan = normalize_meal_plan(cols[2])
                 for idx, (season_name, date_range) in zip(season_cols, season_info):
                     if idx >= len(cols):
                         continue
@@ -221,7 +221,8 @@ def analyze_tariff_text_with_llm(text, client):
         "| Room Category | Plan | Start Date | End Date | Room Price | Adult Price | Child Price | Season |. "
         "If there are multiple plans or date ranges, include all rows. "
         "If possible, infer the season name (e.g., peakSeason, offSeason) from the text. "
-        "exclude rack price and Published rates. "
+        "If extra bed price or child with bed is give add extra bed price to adult price and child with price to child price "
+        "exclude rack price and Published rates and in room category exclude extra bed and child with bed and child without bed . "
         "Output only the markdown table, nothing else.\n\n"
         f"Text: {text}\n"
     )
@@ -235,6 +236,33 @@ def analyze_tariff_text_with_llm(text, client):
     except Exception as e:
         print(f"Error calling Google Gemini LLM: {e}")
         return None
+
+def normalize_meal_plan(plan):
+    """
+    Normalize meal plans: CPAI -> CP, MAPAI -> MAP, APAI -> AP, EPAI -> EP
+    """
+    if not plan:
+        return plan
+    
+    plan_upper = str(plan).upper()
+    if 'CPAI' in plan_upper:
+        return 'CP'
+    elif 'MAPAI' in plan_upper:
+        return 'MAP'
+    elif 'APAI' in plan_upper:
+        return 'AP'
+    elif 'EPAI' in plan_upper:
+        return 'EP'
+    elif 'CP' in plan_upper:
+        return 'CP'
+    elif 'MAP' in plan_upper:
+        return 'MAP'
+    elif 'AP' in plan_upper:
+        return 'AP'
+    elif 'EP' in plan_upper:
+        return 'EP'
+    
+    return plan
 
 def extract_tariff_from_pdf(pdf_path, output_csv_path=None, use_llm=True):
     """
@@ -263,12 +291,25 @@ def extract_tariff_from_pdf(pdf_path, output_csv_path=None, use_llm=True):
                 f.write(llm_table)
             # Parse the markdown table into a list of dicts for JSON API
             rows = parse_markdown_table(llm_table)
+            # Normalize meal plans in the extracted data
+            for row in rows:
+                if 'Plan' in row:
+                    row['Plan'] = normalize_meal_plan(row['Plan'])
+                if 'Meal Plan' in row:
+                    row['Meal Plan'] = normalize_meal_plan(row['Meal Plan'])
             return rows if rows else []
     
     # Fallback: try to extract using the original method
     df = extract_tariff_data(pdf_path, ocr_client)
     if not df.empty:
-        return df.to_dict('records')
+        records = df.to_dict('records')
+        # Normalize meal plans in the extracted data
+        for record in records:
+            if 'Plan' in record:
+                record['Plan'] = normalize_meal_plan(record['Plan'])
+            if 'Meal Plan' in record:
+                record['Meal Plan'] = normalize_meal_plan(record['Meal Plan'])
+        return records
     
     return []
 
