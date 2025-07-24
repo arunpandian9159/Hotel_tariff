@@ -13,7 +13,7 @@
             min-height: 100vh;
         }
         .container {
-            max-width: 650px;
+            max-width: 800px;
             margin: 60px auto;
             background: #fff;
             border-radius: 12px;
@@ -92,6 +92,7 @@
             border: 1px solid #e3e6ea;
             padding: 10px 8px;
             text-align: left;
+            font-size: 0.9rem;
         }
         th {
             background: #e3e6ea;
@@ -193,8 +194,6 @@ form.addEventListener('submit', async function(e) {
                 table.innerHTML += `
                     <thead>
                         <tr>
-                            <th>Room Category</th>
-                            <th>Plan</th>
                             <th>Start Date</th>
                             <th>End Date</th>
                             <th>Room Price</th>
@@ -206,8 +205,6 @@ form.addEventListener('submit', async function(e) {
                     <tbody>
                         ${roomCategories[roomCat][plan].map(row => `
                             <tr>
-                                <td>${row["Room Category"] || ''}</td>
-                                <td>${row["Plan"] || row["Meal Plan"] || ''}</td>
                                 <td>${row["Start Date"] || ''}</td>
                                 <td>${row["End Date"] || ''}</td>
                                 <td>${row["Room Price"] || ''}</td>
