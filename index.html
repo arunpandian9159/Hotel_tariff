@@ -120,27 +120,11 @@
     <div class="loader" id="loader"></div>
     <div id="error"></div>
     <div id="success"></div>
-    <table id="result-table">
-        <thead>
-            <tr>
-                <th>Meal Plan</th>
-                <th>Start Date</th>
-                <th>End Date</th>
-                <th>Room Price</th>
-                <th>Adult Price</th>
-                <th>Child Price</th>
-                <th>Season</th>
-                <th>Hotel</th>
-            </tr>
-        </thead>
-        <tbody id="result-body">
-        </tbody>
-    </table>
+    <div id="tariff-tables"></div>
 </div>
 <script>
 const form = document.getElementById('upload-form');
-const resultTable = document.getElementById('result-table');
-const resultBody = document.getElementById('result-body');
+const tariffTablesDiv = document.getElementById('tariff-tables');
 const errorDiv = document.getElementById('error');
 const loader = document.getElementById('loader');
 const successDiv = document.getElementById('success');
@@ -149,8 +133,7 @@ form.addEventListener('submit', async function(e) {
     e.preventDefault();
     errorDiv.textContent = '';
     successDiv.textContent = '';
-    resultTable.style.display = 'none';
-    resultBody.innerHTML = '';
+    tariffTablesDiv.innerHTML = '';
     loader.style.display = 'block';
     const fileInput = document.getElementById('pdf-file');
     if (!fileInput.files.length) {
@@ -179,21 +162,51 @@ form.addEventListener('submit', async function(e) {
         if (data.length === 0) {
             throw new Error('No data extracted from the PDF.');
         }
+        // Group data by Plan (EP, CP, MAP, etc.)
+        const plans = {};
         data.forEach(row => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${row["Meal Plan"] || ''}</td>
-                <td>${row["Start Date"] || ''}</td>
-                <td>${row["End Date"] || ''}</td>
-                <td>${row["Room Price"] || ''}</td>
-                <td>${row["Adult Price"] || ''}</td>
-                <td>${row["Child Price"] || ''}</td>
-                <td>${row["Season"] || ''}</td>
-                <td>${row["Hotel"] || ''}</td>
-            `;
-            resultBody.appendChild(tr);
+            const plan = row["Plan"] || row["Meal Plan"] || '';
+            if (!plans[plan]) plans[plan] = [];
+            plans[plan].push(row);
         });
-        resultTable.style.display = '';
+        // For each plan, create a table
+        Object.keys(plans).forEach(plan => {
+            const table = document.createElement('table');
+            table.style.marginBottom = '32px';
+            const caption = document.createElement('caption');
+            caption.textContent = plan;
+            caption.style.fontWeight = 'bold';
+            caption.style.fontSize = '1.1em';
+            caption.style.marginBottom = '8px';
+            table.appendChild(caption);
+            table.innerHTML += `
+                <thead>
+                    <tr>
+                        <th>Plan</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Room Price</th>
+                        <th>Adult Price</th>
+                        <th>Child Price</th>
+                        <th>Season</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${plans[plan].map(row => `
+                        <tr>
+                            <td>${row["Plan"] || row["Meal Plan"] || ''}</td>
+                            <td>${row["Start Date"] || ''}</td>
+                            <td>${row["End Date"] || ''}</td>
+                            <td>${row["Room Price"] || ''}</td>
+                            <td>${row["Adult Price"] || ''}</td>
+                            <td>${row["Child Price"] || ''}</td>
+                            <td>${row["Season"] || ''}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            `;
+            tariffTablesDiv.appendChild(table);
+        });
         successDiv.textContent = 'Tariff details extracted successfully!';
     } catch (err) {
         errorDiv.textContent = err.message;
