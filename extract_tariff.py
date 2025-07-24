@@ -1,6 +1,7 @@
 import base64
 import os
 from mistralai import Mistral
+from langchain_google_genai import ChatGoogleGenerativeAI
 from datetime import datetime
 import pandas as pd
 import re
@@ -10,6 +11,7 @@ import json
 # Load environment variables
 load_dotenv()
 api_key = os.getenv("MISTRAL_API_KEY")
+google_api_key = os.getenv("GOOGLE_API_KEY")
 
 def extract_text_from_pdf(document_url, client):
     """Extract text from a PDF using Mistral OCR API with a document URL or base64-encoded local file."""
@@ -189,13 +191,12 @@ def extract_tariff_data(pdf_path, client):
 
 def analyze_tariff_text_with_llm(text, client):
     """
-    Use Mistral LLM to analyze the extracted OCR text and return a structured tariff table in the required format.
+    Use Google Gemini LLM to analyze the extracted OCR text and return a structured tariff table in the required format.
     """
     prompt = (
         "You are an expert at extracting hotel tariff tables from text. "
         "Given the following text extracted from a hotel tariff PDF, extract the room category (e.g., Deluxe Room) and output a markdown table with columns: "
-        "room category"
-        "| Plan | Start Date | End Date | Room Price | Adult Price | Child Price | Season |. "
+        "| Room Category | Plan | Start Date | End Date | Room Price | Adult Price | Child Price | Season |. "
         "If there are multiple plans or date ranges, include all rows. "
         "If possible, infer the season name (e.g., peakSeason, offSeason) from the text. "
         "exclude rack price and Published rates. "
@@ -203,16 +204,14 @@ def analyze_tariff_text_with_llm(text, client):
         f"Text: {text}\n"
     )
     try:
-        chat_response = client.chat.complete(
-            model="mistral-large-latest",  # or another available LLM model
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-        )
-        # Extract the markdown table from the response
-        content = chat_response.choices[0].message.content if hasattr(chat_response.choices[0], 'message') else chat_response.choices[0].content
-        return content
+        chat_response = client.invoke(prompt)
+        # The Gemini LLM returns the content directly
+        if hasattr(chat_response, 'content'):
+            return str(chat_response.content)
+        else:
+            return str(chat_response)
     except Exception as e:
-        print(f"Error calling Mistral LLM: {e}")
+        print(f"Error calling Google Gemini LLM: {e}")
         return None
 
 def extract_tariff_from_pdf(pdf_path, output_csv_path=None, use_llm=True):
@@ -222,12 +221,17 @@ def extract_tariff_from_pdf(pdf_path, output_csv_path=None, use_llm=True):
     Optionally saves the extracted data to a specified CSV path.
     If use_llm is True, uses the LLM to extract the table from OCR text.
     """
-    client = Mistral(api_key=api_key)
-    text = extract_text_from_pdf(pdf_path, client)
+    # Use Mistral for OCR, Gemini for LLM
+    ocr_client = Mistral(api_key=api_key)
+    text = extract_text_from_pdf(pdf_path, ocr_client)
     if not text:
         return []
     if use_llm:
-        llm_table = analyze_tariff_text_with_llm(text, client)
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-pro",
+            google_api_key=google_api_key,
+        )
+        llm_table = analyze_tariff_text_with_llm(text, llm)
         if llm_table:
             # Optionally save the markdown table to a file
             os.makedirs('output', exist_ok=True)
