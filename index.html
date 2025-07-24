@@ -163,14 +163,36 @@ form.addEventListener('submit', async function(e) {
         if (data.length === 0) {
             throw new Error('No data extracted from the PDF.');
         }
+        // Function to normalize meal plans
+        function normalizeMealPlan(plan) {
+            if (!plan) return '';
+            const upperPlan = plan.toUpperCase();
+            if (upperPlan.includes('CPAI')) return 'CP';
+            if (upperPlan.includes('MAPAI')) return 'MAP';
+            if (upperPlan.includes('APAI')) return 'AP';
+            if (upperPlan.includes('EPAI')) return 'EP';
+            if (upperPlan.includes('CP')) return 'CP';
+            if (upperPlan.includes('MAP')) return 'MAP';
+            if (upperPlan.includes('AP')) return 'AP';
+            if (upperPlan.includes('EP')) return 'EP';
+            return plan; // Return original if no match
+        }
+
         // Group data by Room Category first, then by Plan within each Room Category
         const roomCategories = {};
         data.forEach(row => {
             const roomCat = row["Room Category"] || '';
-            const plan = row["Plan"] || row["Meal Plan"] || '';
+            const originalPlan = row["Plan"] || row["Meal Plan"] || '';
+            const normalizedPlan = normalizeMealPlan(originalPlan);
+            
             if (!roomCategories[roomCat]) roomCategories[roomCat] = {};
-            if (!roomCategories[roomCat][plan]) roomCategories[roomCat][plan] = [];
-            roomCategories[roomCat][plan].push(row);
+            if (!roomCategories[roomCat][normalizedPlan]) roomCategories[roomCat][normalizedPlan] = [];
+            
+            // Update the row with normalized plan for display
+            row["Plan"] = normalizedPlan;
+            row["Meal Plan"] = normalizedPlan;
+            
+            roomCategories[roomCat][normalizedPlan].push(row);
         });
         // For each Room Category, create a section, then for each plan, create a table
         Object.keys(roomCategories).forEach(roomCat => {
