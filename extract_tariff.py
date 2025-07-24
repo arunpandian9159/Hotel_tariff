@@ -174,18 +174,37 @@ def extract_tariff_data(pdf_path, client):
         else:
             print(f"No tariff data extracted from {pdf_path}")
             return pd.DataFrame()
+    # Fallback: Try to extract any markdown table if specific pattern not found
+    generic_table_match = re.search(r'(\|[\s\S]+?)(?:\n\n|$)', text)
+    if generic_table_match:
+        table_text = generic_table_match.group(1)
+        parsed = parse_markdown_table(table_text)
+        if parsed:
+            df = pd.DataFrame(parsed)
+            df['Hotel'] = hotel_name
+            return df
     print(f"No tariff data extracted from {pdf_path}")
     return pd.DataFrame()
 
-def extract_tariff_from_pdf(pdf_path):
+def extract_tariff_from_pdf(pdf_path, output_csv_path=None):
     """
     Wrapper for Flask: Given a PDF path, returns a list of dicts with keys:
     Meal Plan, Start Date, End Date, Room Price, Adult Price, Child Price, Season, Hotel
+    Optionally saves the extracted data to a specified CSV path.
     """
     client = Mistral(api_key=api_key)
     df = extract_tariff_data(pdf_path, client)
     if df.empty:
         return []
+    # Always write to CSV if data is extracted
+    os.makedirs('output', exist_ok=True)
+    if output_csv_path is None:
+        # Default to hotel_tariff.csv for backward compatibility
+        output_csv_path = "output/hotel_tariff.csv"
+    df.to_csv(output_csv_path, index=False)
+    # Print extracted DataFrame to terminal
+    print("Extracted Tariff Data (DataFrame):")
+    print(df)
     # Try to extract start/end date from the 'Date Ranges' column if present
     result = []
     for _, row in df.iterrows():
@@ -207,6 +226,10 @@ def extract_tariff_from_pdf(pdf_path):
             "Season": row.get("Season", "N/A"),
             "Hotel": row.get("Hotel", "N/A")
         })
+    # Print extracted result list to terminal
+    print("Extracted Tariff Data (List of Dicts):")
+    for item in result:
+        print(item)
     return result
 
 if __name__ == "__main__":
