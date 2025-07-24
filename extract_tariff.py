@@ -194,6 +194,7 @@ def analyze_tariff_text_with_llm(text, client):
     prompt = (
         "You are an expert at extracting hotel tariff tables from text. "
         "Given the following text extracted from a hotel tariff PDF, extract the room category (e.g., Deluxe Room) and output a markdown table with columns: "
+        "room category"
         "| Plan | Start Date | End Date | Room Price | Adult Price | Child Price | Season |. "
         "If there are multiple plans or date ranges, include all rows. "
         "If possible, infer the season name (e.g., peakSeason, offSeason) from the text. "
@@ -202,13 +203,13 @@ def analyze_tariff_text_with_llm(text, client):
         f"Text: {text}\n"
     )
     try:
-        response = client.chat.complete(
+        chat_response = client.chat.complete(
             model="mistral-large-latest",  # or another available LLM model
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
         )
         # Extract the markdown table from the response
-        content = response.choices[0].message['content'] if hasattr(response.choices[0], 'message') else response.choices[0].content
+        content = chat_response.choices[0].message.content if hasattr(chat_response.choices[0], 'message') else chat_response.choices[0].content
         return content
     except Exception as e:
         print(f"Error calling Mistral LLM: {e}")
@@ -234,14 +235,7 @@ def extract_tariff_from_pdf(pdf_path, output_csv_path=None, use_llm=True):
             with open(f'output/{base}_llm_table.md', 'w', encoding='utf-8') as f:
                 f.write(llm_table)
             # Optionally, parse the markdown table into a list of dicts for JSON API
-            rows = []
-            lines = [l for l in llm_table.split('\n') if l.strip().startswith('|')]
-            if len(lines) >= 2:
-                header = [h.strip() for h in lines[0].split('|') if h.strip()]
-                for row in lines[2:]:
-                    cols = [c.strip() for c in row.split('|') if c.strip()]
-                    if len(cols) == len(header):
-                        rows.append(dict(zip(header, cols)))
+            rows = parse_markdown_table(llm_table)
             return rows
 
 if __name__ == "__main__":
