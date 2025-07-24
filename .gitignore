@@ -9,7 +9,7 @@ __pycache__/
 your_output_dir/
 output/
 output/uploads/
-
+uploads/
 # OS generated files
 .DS_Store
 Thumbs.db
